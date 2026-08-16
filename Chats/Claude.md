@@ -396,3 +396,44 @@ One real wrinkle worth flagging: `<dialog>`'s native Escape-to-close and your sw
 
 So to directly answer the framing of your question: `<dialog>` makes the *inert* problem moot (the first thing we discussed), but has zero bearing on the *swipe gesture* problem — that one was never something any native element solves, dialog or otherwise, so the controller isn't made redundant by adopting `<dialog>`.
 
+---
+
+## Me
+
+Is the swipe to dismiss behavior a behavior only needed by drawer components?  Or are there other use cases for this behavior?
+
+---
+
+## Claude
+
+No, it's a pretty common interaction pattern well beyond drawers. Anywhere a panel is presented as "temporarily overlaid, dismissible by directional gesture" is a candidate. A few categories:
+
+**Overlay/sheet-style UI (same mechanics as a drawer, different position/axis):**
+- **Bottom sheets** — swipe down to dismiss (iOS/Android share sheets, Google Maps place details, most mobile "action sheet" patterns). Same controller, `axis: 'y'`, `direction: 1`.
+- **Toasts / snackbars** — swipe to dismiss before the auto-timeout fires. Often horizontal regardless of where the toast sits on screen (left or right swipe both valid, i.e. `direction` can be bidirectional here — a variation the controller as written doesn't currently support, since it clamps to one direction).
+- **Modals on mobile web** — some mobile-optimized modals borrow the bottom-sheet drag-to-dismiss pattern even though they're centered/full-screen dialogs, not literal drawers.
+
+**List-item level, not panel-level:**
+- **Swipe-to-delete / swipe-to-archive** (Mail apps, Gmail's mobile web, Trello cards) — same gesture math (delta, velocity, threshold), but the "commit" action is removing a list item rather than closing a container, and it's usually the row itself as `panel` and `host`, not the whole page's chrome.
+- **Swipe actions revealing buttons** (iOS-style "swipe to reveal Delete/Archive/Flag") — a variant where crossing a *smaller* threshold reveals action buttons rather than fully committing, and crossing a *second, larger* threshold auto-commits the primary action. This is really the same controller with two thresholds instead of one, plus a "revealed" resting state in addition to open/closed.
+
+**Carousels / pagers:**
+- **Swipeable image galleries, onboarding slides, card stacks (Tinder-style)** — conceptually similar (drag, measure delta+velocity, commit-or-snap-back) but the "commit" outcome is advancing to next/previous item rather than dismissing, and there's often no clamping to one direction (you can swipe either way). This is close enough to reuse the primitive but different enough in intent that it's arguably a sibling controller (`SwipeNavigateController`?) rather than the same one repurposed.
+
+**Non-UI-chrome uses:**
+- **Pull-to-refresh** — same shape (track drag distance/velocity against a threshold) but vertical, starts from a scroll boundary rather than a fixed element, and "commit" triggers a refresh action instead of dismissal. Close cousin, not identical, since it also needs to coordinate with native scroll (can't just `touch-action: none` a whole scrollable list).
+
+So there's a real spectrum here:
+
+| Pattern | Same controller as-is? |
+|---|---|
+| Bottom sheet | Yes — just `axis: 'y'` |
+| Drawer (any edge) | Yes — this is what it was built for |
+| Toast/snackbar | Mostly — needs bidirectional support added |
+| Swipe-to-delete list item | Yes, different `onCommit` semantics |
+| Swipe-to-reveal actions | Needs a second threshold/state, bigger change |
+| Carousel/card swipe | Related but distinct — different commit semantics (navigate, not dismiss) |
+| Pull-to-refresh | Related but distinct — different trigger point (scroll boundary) and needs scroll coordination |
+
+Given that spread, I'd keep `SwipeDismissController` scoped to genuinely "drag past threshold → dismiss/close" cases (drawer, bottom sheet, toast, swipe-to-delete), since those all share the exact same math and just differ in axis/direction/what `onCommit` does. I wouldn't try to stretch it to cover carousels or pull-to-refresh — those have different enough resting-state and gesture-boundary semantics that forcing them through the same abstraction would likely make the controller's API worse for the common case just to accommodate edge cases it wasn't really designed for.
+
