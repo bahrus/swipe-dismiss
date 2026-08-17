@@ -95,3 +95,13 @@ You can ship one `swipe-dismiss/SwipeDismissController.js` and two thin entry po
 - `swipe-dismiss/swipe-dismiss-feature.js` — feature wrapper
 
 That avoids duplicating the gesture logic while keeping each integration idiomatic to its own mechanism.
+
+---
+
+## Bruce's Response I
+
+Let's go with your suggestion to develop the custom element feature first.  This is convenient because I have a custom element that needs this feature right away.
+
+I prefer we call it SwipDismissFeature rather than controller.
+
+If you have enough to go, please implement it and add the implementation notes below.  If not, please continue to discuss what is still needed below.
