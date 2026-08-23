@@ -141,3 +141,10 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Playwright test artifacts
+/test-results/
+/.last-run/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

@@ -104,4 +104,32 @@ Let's go with your suggestion to develop the custom element feature first.  This
 
 I prefer we call it SwipeDismissFeature rather than controller.
 
-If you have enough to go, please implement it and add the implementation notes below.  If not, please continue to discuss what is still needed below.
+If you have enough to go on, please implement it and add the implementation notes below.  If not, please continue to discuss what is still needed below.
+
+## Kimi's Implementation Notes
+
+Implemented the `SwipeDismissFeature` custom element feature in `swipe-dismiss/`.
+
+What’s now in place:
+
+- `SwipeDismissFeature.js` — gesture engine using Pointer Events, with `onProgress` / `onCommit` / `onCancel` callbacks, configurable axis, direction (including `'both'`), distance/velocity thresholds, and optional handle/panel selectors.
+- `types/swipe-dismiss/types.d.ts` — public `SwipeDismissProps` and `FeatureSpawnContext` typings.
+- `imports.html` — import map for local dev.
+- `package.json` — `type: "module"`, `main`/`exports` pointing at `SwipeDismissFeature.js`, plus `serve`/`test`/`update`/browser scripts and the standard dev deps.
+- `playwright.config.js` + `tests/test1.html` + `tests/swipe.spec.js` — manual test page and a Playwright spec that drives it.
+- `.vscode/settings.json` and `.gitignore` updates for Playwright artifacts.
+- `README.md` — usage, API table, CSS guidance, and local demo/test instructions.
+
+Verification:
+
+```bash
+cd c:/git/ceFeatures/swipe-dismiss
+npx playwright test
+```
+
+Result: `1 passed`.
+
+The test page at `tests/test1.html` exercises:
+1. Dragging past the 30% distance threshold commits.
+2. Dragging under the threshold cancels.
+3. A separate handle + `direction: 'both'` works for bidirectional swipes.

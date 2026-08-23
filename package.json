@@ -1,7 +1,7 @@
 {
   "name": "swipe-dismiss",
-  "version": "0.0.0",
-  "description": "",
+  "version": "0.0.1",
+  "description": "Custom element feature that adds swipe-to-dismiss gesture handling",
   "homepage": "https://github.com/bahrus/swipe-dismiss#readme",
   "bugs": {
     "url": "https://github.com/bahrus/swipe-dismiss/issues"
@@ -13,8 +13,22 @@
   "license": "MIT",
   "author": "Bruce B. Anderson <anderson.bruce.b@gmail.com>",
   "type": "module",
-  "main": "index.js",
+  "main": "SwipeDismissFeature.js",
+  "exports": {
+    ".": "./SwipeDismissFeature.js",
+    "./SwipeDismissFeature.js": "./SwipeDismissFeature.js"
+  },
   "scripts": {
-    "test": "playwright test"
-  }
+    "serve": "node ./node_modules/spa-ssi/serve.js",
+    "test": "playwright test",
+    "update": "ncu -u && npm install",
+    "safari": "npx playwright wk http://localhost:8000",
+    "chrome": "npx playwright cr http://localhost:8000"
+  },
+  "devDependencies": {
+    "assign-gingerly": "0.0.75",
+    "@playwright/test": "1.62.1",
+    "spa-ssi": "0.0.27"
+  },
+  "dependencies": {}
 }
