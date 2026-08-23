@@ -102,6 +102,6 @@ That avoids duplicating the gesture logic while keeping each integration idiomat
 
 Let's go with your suggestion to develop the custom element feature first.  This is convenient because I have a custom element that needs this feature right away.
 
-I prefer we call it SwipDismissFeature rather than controller.
+I prefer we call it SwipeDismissFeature rather than controller.
 
 If you have enough to go, please implement it and add the implementation notes below.  If not, please continue to discuss what is still needed below.
