@@ -1,46 +1,122 @@
-# swipe-dismiss [TODO]
+# swipe-dismiss
 
-One behavior that the hamburger menu / side drawer component requires to be complete is a swipe to dismiss behavior.  Implementing this behavior appears to be non trivial with the current web platform api as it stands.
+A custom element feature that adds swipe-to-dismiss gesture handling to a custom element. It tracks pointer drag distance and velocity along one axis and tells the host whether to commit the dismiss action or snap back.
 
-The behavior could be useful not just to drawer components, [but a number of other scenarios as well](./Chats/Claude.md).
+The feature intentionally does not touch rendering. It computes the gesture and reports `onProgress`, `onCommit`, and `onCancel`; the host element decides how to translate those callbacks into CSS transforms, state changes, or dialog close calls.
 
-This package provides both an element enhancement / custom attribute, to apply the behavior to third party content, as well as a custom element feature for scenarios where the UI is controlled exclusively by one "owner."
+A future enhancement (`be-swipe-dismiss`) is planned for applying the same behavior to third-party markup via attributes.
 
-[Ideally, it will be the same class, just different configuration integration artifacts, but that remains to be seen].
+## Usage
 
-## Practical Starting Point
+```javascript
+import 'assign-gingerly/assignFeatures.js';
+import { SwipeDismissFeature } from 'swipe-dismiss/SwipeDismissFeature.js';
 
-I would start with the **custom element feature** first, because the lifecycle is simpler and the test harness in the feature docs is more direct. Once the controller works there, wrap it as an **enhancement** by translating attribute config into the same controller options. The generated `emc.json` would look something like:
+class MyDrawer extends HTMLElement {
+    static supportedFeatures = {
+        swipeDismiss: {
+            fallbackSpawn: SwipeDismissFeature,
+            callbackForwarding: ['connectedCallback', 'disconnectedCallback']
+        }
+    };
+}
 
-```json
-{
-    "enhConfig": {
-        "enhKey": "SwipeDismiss",
-        "spawn": "swipe-dismiss/swipe-dismiss.js",
-        "withAttrs": {
-            "base": "swipe-dismiss",
-            "axis": "${base}-axis",
-            "direction": "${base}-direction",
-            "distanceThreshold": "${base}-distance-threshold",
-            "velocityThreshold": "${base}-velocity-threshold"
+customElements.assignFeatures(MyDrawer, {
+    swipeDismiss: {
+        spawn: SwipeDismissFeature,
+        withAttrs: {
+            base: 'swipe-dismiss',
+            axis: '${base}-axis',
+            direction: '${base}-direction',
+            distanceThreshold: '${base}-distance-threshold',
+            velocityThreshold: '${base}-velocity-threshold',
+            _distanceThreshold: { instanceOf: 'Number' },
+            _velocityThreshold: { instanceOf: 'Number' }
         }
     }
+});
+
+customElements.define('my-drawer', MyDrawer);
+```
+
+In the host element, attach the callbacks after the feature is spawned and apply the visual translation in `onProgress`:
+
+```javascript
+const drawer = document.querySelector('my-drawer');
+const panel = drawer.querySelector('[part="panel"]');
+
+drawer.swipeDismiss.onProgress = (deltaPx, fraction) => {
+    panel.style.transform = `translateX(${deltaPx}px)`;
+};
+
+drawer.swipeDismiss.onCommit = () => {
+    drawer.removeAttribute('open');
+};
+
+drawer.swipeDismiss.onCancel = () => {
+    panel.style.transform = '';
+};
+```
+
+## HTML configuration
+
+With the `withAttrs` pattern above, the host element can be configured declaratively:
+
+```html
+<my-drawer swipe-dismiss-axis="x"
+           swipe-dismiss-direction="1"
+           swipe-dismiss-distance-threshold="0.3"
+           swipe-dismiss-velocity-threshold="0.5">
+    <div part="panel">Drawer content</div>
+</my-drawer>
+```
+
+## API
+
+The feature exposes these configurable properties:
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `axis` | `'x' \| 'y'` | `'x'` | Axis along which the dismiss gesture is measured. |
+| `direction` | `1 \| -1 \| 'both'` | `1` | Direction that counts toward dismissal. `1` = right/down, `-1` = left/up, `'both'` = either direction (useful for toasts/snackbars). |
+| `distanceThreshold` | `number` | `0.4` | Fraction of the panel size that must be dragged to trigger commit. |
+| `velocityThreshold` | `number` | `0.5` | Velocity threshold in px/ms. A fast flick commits even if distance is below the threshold. |
+| `handleSelector` | `string \| null` | `null` | CSS selector for the drag handle. Defaults to the host element. |
+| `panelSelector` | `string \| null` | `null` | CSS selector for the panel that visually follows the drag. Defaults to the handle. |
+| `onProgress` | `(deltaPx: number, fraction: number) => void` | `null` | Called on every pointer move with the current delta and the fraction of the panel size. |
+| `onCommit` | `() => void` | `null` | Called when the gesture crosses the commit threshold. |
+| `onCancel` | `() => void` | `null` | Called when the gesture is released before the commit threshold. |
+
+## Important CSS note
+
+The drag handle should disable native touch gestures so pointer events are not stolen by the browser:
+
+```css
+[part="panel"], .drag-handle {
+    touch-action: none;
 }
 ```
 
-The feature registration would be similar but declared on the host element via `assignFeatures` and `withAttrs`.
+If the panel content itself needs to scroll, scope `touch-action: none` to the handle only and leave the content area scrollable.
+
+## Use cases
+
+- **Drawers / side panels** — horizontal swipe to close.
+- **Bottom sheets** — vertical swipe down (`axis: 'y'`, `direction: 1`).
+- **Toasts / snackbars** — horizontal swipe in either direction (`direction: 'both'`).
+- **Swipe-to-delete list items** — same gesture math, different `onCommit` action.
 
 ## Viewing Demos Locally
 
 1. Install git
 2. Fork/clone this repo
 3. Install node.js
-4. Open command window to folder where you cloned this repo
-5. > git submodule add https://github.com/bahrus/types.git types
-6. > git submodule update --init --recursive
-7. > npm install
-8. > npm run serve
-9. Open http://localhost:8000/ in a modern browser
+4. Open a command window in the repo folder
+5. `git submodule add https://github.com/bahrus/types.git types`
+6. `git submodule update --init --recursive`
+7. `npm install`
+8. `npm run serve`
+9. Open http://localhost:8000/tests/test1.html in a modern browser
 
 ## Running Tests
 
@@ -48,5 +124,8 @@ The feature registration would be similar but declared on the host element via `
 > npm run test
 ```
 
+The manual test page is at `tests/test1.html`. Programmatic Playwright specs can be added alongside it.
 
+## License
 
+MIT

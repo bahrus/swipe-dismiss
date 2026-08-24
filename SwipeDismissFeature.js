@@ -1,5 +1,5 @@
 // @ts-check
-/** @import {AllProps, FeatureSpawnContext} from './types/swipe-dismiss/types' */
+/** @import {SwipeDismissProps, FeatureSpawnContext} from './types/swipe-dismiss/types' */
 
 /**
  * A custom element feature that adds swipe-to-dismiss gesture handling.
@@ -8,7 +8,7 @@
  * and reports progress / commit / cancel via callbacks. The host custom element
  * decides how to translate that into CSS or state changes.
  *
- * @implements {AllProps & { hostConnected(): void; hostDisconnected(): void }}
+ * @implements {SwipeDismissProps}
  */
 class SwipeDismissFeature {
     /** @type {WeakRef<Element>} */
@@ -50,7 +50,7 @@ class SwipeDismissFeature {
     /**
      * @param {Element} hostElement
      * @param {FeatureSpawnContext} ctx
-     * @param {Partial<import('./types/swipe-dismiss/types').SwipeDismissProps>} [initVals]
+     * @param {Partial<SwipeDismissProps>} [initVals]
      */
     constructor(hostElement, ctx, initVals) {
         this.#hostRef = new WeakRef(hostElement);

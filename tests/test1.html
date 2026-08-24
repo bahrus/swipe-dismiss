@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - SwipeDismissFeature</title>
+    <!-- #include virtual="/imports.html" -->
+    <style>
+        .drawer {
+            width: 300px;
+            height: 200px;
+            background: #e2e8f0;
+            touch-action: none;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: sans-serif;
+        }
+        .handle {
+            width: 300px;
+            height: 40px;
+            background: #94a3b8;
+            touch-action: none;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .panel {
+            width: 300px;
+            height: 160px;
+            background: #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+    <script type=module>
+        import 'assign-gingerly/assignFeatures.js';
+        import { SwipeDismissFeature } from 'swipe-dismiss/SwipeDismissFeature.js';
+
+        class TestSwipeDefault extends HTMLElement {
+            static supportedFeatures = {
+                swipeDismiss: {
+                    fallbackSpawn: SwipeDismissFeature,
+                    callbackForwarding: ['connectedCallback', 'disconnectedCallback']
+                }
+            };
+        }
+
+        class TestSwipeHandle extends HTMLElement {
+            static supportedFeatures = {
+                swipeDismiss: {
+                    fallbackSpawn: SwipeDismissFeature,
+                    callbackForwarding: ['connectedCallback', 'disconnectedCallback']
+                }
+            };
+        }
+
+        await customElements.assignFeatures(TestSwipeDefault, {
+            swipeDismiss: {
+                spawn: SwipeDismissFeature,
+                withAttrs: {
+                    base: 'swipe-dismiss',
+                    axis: '${base}-axis',
+                    direction: '${base}-direction',
+                    distanceThreshold: '${base}-distance-threshold',
+                    velocityThreshold: '${base}-velocity-threshold',
+                    _distanceThreshold: { instanceOf: 'Number' },
+                    _velocityThreshold: { instanceOf: 'Number' }
+                }
+            }
+        });
+
+        await customElements.assignFeatures(TestSwipeHandle, {
+            swipeDismiss: {
+                spawn: SwipeDismissFeature,
+                withAttrs: {
+                    base: 'swipe-dismiss',
+                    axis: '${base}-axis',
+                    direction: '${base}-direction',
+                    handleSelector: '${base}-handle',
+                    panelSelector: '${base}-panel',
+                    distanceThreshold: '${base}-distance-threshold',
+                    velocityThreshold: '${base}-velocity-threshold',
+                    _distanceThreshold: { instanceOf: 'Number' },
+                    _velocityThreshold: { instanceOf: 'Number' }
+                }
+            }
+        });
+
+        customElements.define('test-swipe-default', TestSwipeDefault);
+        customElements.define('test-swipe-handle', TestSwipeHandle);
+
+        // Synthetic PointerEvents do not have a live pointer, so setPointerCapture
+        // would throw. Stub it so we can test the gesture math programmatically.
+        Element.prototype.setPointerCapture = function () {};
+        Element.prototype.releasePointerCapture = function () {};
+
+        function pointerEvent(target, type, clientX, clientY) {
+            const ev = new PointerEvent(type, {
+                bubbles: true,
+                pointerId: 1,
+                isPrimary: true,
+                clientX,
+                clientY
+            });
+            target.dispatchEvent(ev);
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async function runTests() {
+            await customElements.whenDefined('test-swipe-default');
+            await customElements.whenDefined('test-swipe-handle');
+
+            const defaultEl = document.getElementById('default');
+            const drawer = defaultEl.querySelector('.drawer');
+            const feature = defaultEl.swipeDismiss;
+
+            let lastDelta = 0;
+            let lastFraction = 0;
+            let committed = null;
+
+            feature.onProgress = (delta, fraction) => {
+                lastDelta = delta;
+                lastFraction = fraction;
+                drawer.style.transform = `translateX(${delta}px)`;
+            };
+            feature.onCommit = () => {
+                committed = true;
+                drawer.dataset.state = 'dismissed';
+            };
+            feature.onCancel = () => {
+                committed = false;
+                drawer.dataset.state = 'cancelled';
+            };
+
+            console.assert(feature.axis === 'x', 'axis should be x');
+            console.assert(feature.distanceThreshold === 0.3, 'distanceThreshold should be 0.3');
+
+            // Test 1: drag past 30% of 300px => commit
+            pointerEvent(drawer, 'pointerdown', 50, 50);
+            await sleep(10);
+            pointerEvent(drawer, 'pointermove', 150, 50);
+            await sleep(10);
+            pointerEvent(drawer, 'pointerup', 150, 50);
+            await sleep(10);
+
+            console.assert(committed === true, 'Test 1 failed: expected commit');
+            console.assert(lastDelta === 100, `Test 1 failed: expected delta 100, got ${lastDelta}`);
+            console.assert(lastFraction === 100 / 300, `Test 1 failed: expected fraction ~0.33, got ${lastFraction}`);
+            console.log('Test 1 (drag past threshold commits):', committed, lastDelta, lastFraction);
+
+            // Reset
+            drawer.style.transform = '';
+            lastDelta = 0;
+            lastFraction = 0;
+            committed = null;
+
+            // Test 2: drag only 20px (< 90px threshold) => cancel
+            pointerEvent(drawer, 'pointerdown', 100, 50);
+            await sleep(10);
+            pointerEvent(drawer, 'pointermove', 120, 50);
+            await sleep(10);
+            pointerEvent(drawer, 'pointerup', 120, 50);
+            await sleep(10);
+
+            console.assert(committed === false, 'Test 2 failed: expected cancel');
+            console.assert(lastDelta === 20, `Test 2 failed: expected delta 20, got ${lastDelta}`);
+            console.log('Test 2 (drag under threshold cancels):', committed, lastDelta);
+
+            // Test 3: handle + panel + bidirectional swipe
+            const handleEl = document.getElementById('handle');
+            const handle = handleEl.querySelector('.handle');
+            const panel = handleEl.querySelector('.panel');
+            const hFeature = handleEl.swipeDismiss;
+
+            let hCommitted = null;
+            hFeature.onProgress = (delta, fraction) => {
+                panel.style.transform = `translateX(${-delta}px)`;
+            };
+            hFeature.onCommit = () => {
+                hCommitted = true;
+                panel.dataset.state = 'dismissed';
+            };
+            hFeature.onCancel = () => {
+                hCommitted = false;
+                panel.dataset.state = 'cancelled';
+            };
+
+            console.assert(hFeature.direction === 'both', 'direction should be both');
+            console.assert(hFeature.handleSelector === '.handle', 'handleSelector should be .handle');
+
+            // Swipe left on handle (negative delta, direction both => abs)
+            pointerEvent(handle, 'pointerdown', 250, 50);
+            await sleep(10);
+            pointerEvent(handle, 'pointermove', 50, 50);
+            await sleep(10);
+            pointerEvent(handle, 'pointerup', 50, 50);
+            await sleep(10);
+
+            console.assert(hCommitted === true, 'Test 3 failed: expected commit on bidirectional swipe');
+            console.log('Test 3 (bidirectional handle swipe commits):', hCommitted);
+
+            console.log('All SwipeDismissFeature tests passed!');
+        }
+
+        runTests().catch(err => console.error('Test error:', err));
+    </script>
+</head>
+<body>
+    <h1>SwipeDismissFeature Test</h1>
+
+    <h2>Test 1 &amp; 2: Default handle (host), threshold 0.3</h2>
+    <test-swipe-default id="default" swipe-dismiss-axis="x" swipe-dismiss-direction="1" swipe-dismiss-distance-threshold="0.3" swipe-dismiss-velocity-threshold="0.5">
+        <div class="drawer">Drag me right</div>
+    </test-swipe-default>
+
+    <h2>Test 3: Separate handle, bidirectional</h2>
+    <test-swipe-handle id="handle" swipe-dismiss-axis="x" swipe-dismiss-direction="both" swipe-dismiss-handle=".handle" swipe-dismiss-panel=".panel" swipe-dismiss-distance-threshold="0.3" swipe-dismiss-velocity-threshold="0.5">
+        <div class="handle">Drag me left or right</div>
+        <div class="panel">Panel</div>
+    </test-swipe-handle>
+</body>
+</html>
