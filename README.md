@@ -71,6 +71,52 @@ With the `withAttrs` pattern above, the host element can be configured declarati
 </my-drawer>
 ```
 
+## Declarative callbacks
+
+Instead of wiring `onProgress`, `onCommit`, and `onCancel` imperatively, you can declare them via `assign-gingerly` patterns inside the feature configuration's `customData.assign`. This keeps the host element JSON-driven and avoids imperative callbacks.
+
+The `assignFrom` source is the spawned `SwipeDismissFeature` instance, so paths like `?.progressState.deltaPx` resolve to the current gesture state. The target is the host element, so paths like `?.open` resolve against the custom element.
+
+```javascript
+customElements.assignFeatures(MyDrawer, {
+    swipeDismiss: {
+        spawn: SwipeDismissFeature,
+        withAttrs: {
+            base: 'swipe-dismiss',
+            axis: '${base}-axis',
+            direction: '${base}-direction',
+            distanceThreshold: '${base}-distance-threshold',
+            velocityThreshold: '${base}-velocity-threshold',
+            _distanceThreshold: { instanceOf: 'Number' },
+            _velocityThreshold: { instanceOf: 'Number' }
+        },
+        customData: {
+            assign: {
+                onProgress: {
+                    '?.shadowRoot?.panel?.style?.transform =>': {
+                        do: 'builtIns.join',
+                        get: {
+                            value: ['translateX(', '?.progressState?.deltaPx', 'px)']
+                        }
+                    }
+                },
+                onCommit: {
+                    '?.open': false,
+                },
+                onCancel: {
+                    '?.shadowRoot?.panel?.style?.transform': ''
+                }
+            },
+            assignOptions: {
+                // optional additional assignFrom options
+            }
+        }
+    }
+});
+```
+
+Before the declarative `onProgress` assignment runs, the feature updates `progressState` with the current `deltaPx` and `fraction`. Imperative callbacks are still supported and run before the declarative ones.
+
 ## API
 
 The feature exposes these configurable properties:
@@ -86,6 +132,8 @@ The feature exposes these configurable properties:
 | `onProgress` | `(deltaPx: number, fraction: number) => void` | `null` | Called on every pointer move with the current delta and the fraction of the panel size. |
 | `onCommit` | `() => void` | `null` | Called when the gesture crosses the commit threshold. |
 | `onCancel` | `() => void` | `null` | Called when the gesture is released before the commit threshold. |
+| `hostRef` | `WeakRef<Element>` | — | WeakRef to the host custom element. Useful for declarative paths. |
+| `progressState` | `{ deltaPx: number, fraction: number }` | `{ deltaPx: 0, fraction: 0 }` | Current drag state. Updated before each `onProgress` callback and declarative assignment. |
 
 ## Important CSS note
 

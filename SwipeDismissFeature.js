@@ -1,5 +1,6 @@
 // @ts-check
 /** @import {SwipeDismissProps, FeatureSpawnContext} from './types/swipe-dismiss/types' */
+import { assignFrom } from 'assign-gingerly/assignFrom.js';
 
 /**
  * A custom element feature that adds swipe-to-dismiss gesture handling.
@@ -19,6 +20,9 @@ class SwipeDismissFeature {
 
     /** @type {boolean} */
     #hasDisconnected = false;
+
+    /** @type {import('./types/assign-gingerly/types').FeatureConfig['customData'] | undefined} */
+    #customData;
 
     /** @type {import('./types/swipe-dismiss/types').SwipeDismissProps['axis']} */
     axis = 'x';
@@ -47,6 +51,17 @@ class SwipeDismissFeature {
     /** @type {(() => void) | null} */
     onCancel = null;
 
+    /** @type {import('./types/swipe-dismiss/types').AllProps['progressState']} */
+    progressState = { deltaPx: 0, fraction: 0 };
+
+    /**
+     * WeakRef to the host custom element.
+     * @returns {WeakRef<Element>}
+     */
+    get hostRef() {
+        return this.#hostRef;
+    }
+
     /**
      * @param {Element} hostElement
      * @param {FeatureSpawnContext} ctx
@@ -54,6 +69,7 @@ class SwipeDismissFeature {
      */
     constructor(hostElement, ctx, initVals) {
         this.#hostRef = new WeakRef(hostElement);
+        this.#customData = ctx?.injection?.customData;
         if (initVals) {
             Object.assign(this, initVals);
         }
@@ -87,6 +103,21 @@ class SwipeDismissFeature {
      */
     get #host() {
         return this.#hostRef.deref();
+    }
+
+    /**
+     * Execute a declarative callback configuration via assign-gingerly.
+     * @param {'onProgress' | 'onCommit' | 'onCancel'} key
+     */
+    #assignFrom(key) {
+        const host = this.#host;
+        if (!host) return;
+        const pattern = this.#customData?.assign?.[key];
+        if (!pattern) return;
+        assignFrom(host, pattern, {
+            ...this.#customData?.assignOptions,
+            from: this,
+        });
     }
 
     #connect() {
@@ -201,8 +232,11 @@ class SwipeDismissFeature {
         const raw = current - state.start;
         const directed = this.#applyDirection(raw);
         const clamped = Math.max(0, directed);
+        const fraction = clamped / state.size;
 
-        this.onProgress?.(clamped, clamped / state.size);
+        this.progressState = { deltaPx: clamped, fraction };
+        this.onProgress?.(clamped, fraction);
+        this.#assignFrom('onProgress');
     };
 
     /**
@@ -219,6 +253,8 @@ class SwipeDismissFeature {
         const elapsed = performance.now() - state.startTime;
         const velocity = elapsed > 0 ? delta / elapsed : 0;
 
+        this.progressState = { deltaPx: delta, fraction: delta / state.size };
+
         this.#endDrag();
 
         const committed =
@@ -227,8 +263,10 @@ class SwipeDismissFeature {
 
         if (committed) {
             this.onCommit?.();
+            this.#assignFrom('onCommit');
         } else {
             this.onCancel?.();
+            this.#assignFrom('onCancel');
         }
     };
 

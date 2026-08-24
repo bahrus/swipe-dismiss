@@ -58,6 +58,15 @@
             };
         }
 
+        class TestSwipeDeclarative extends HTMLElement {
+            static supportedFeatures = {
+                swipeDismiss: {
+                    fallbackSpawn: SwipeDismissFeature,
+                    callbackForwarding: ['connectedCallback', 'disconnectedCallback']
+                }
+            };
+        }
+
         await customElements.assignFeatures(TestSwipeDefault, {
             swipeDismiss: {
                 spawn: SwipeDismissFeature,
@@ -90,8 +99,38 @@
             }
         });
 
+        await customElements.assignFeatures(TestSwipeDeclarative, {
+            swipeDismiss: {
+                spawn: SwipeDismissFeature,
+                withAttrs: {
+                    base: 'swipe-dismiss',
+                    axis: '${base}-axis',
+                    direction: '${base}-direction',
+                    distanceThreshold: '${base}-distance-threshold',
+                    velocityThreshold: '${base}-velocity-threshold',
+                    _distanceThreshold: { instanceOf: 'Number' },
+                    _velocityThreshold: { instanceOf: 'Number' }
+                },
+                customData: {
+                    assign: {
+                        onProgress: {
+                            '?.dataset.swipeDelta': '?.progressState.deltaPx',
+                            '?.dataset.swipeFraction': '?.progressState.fraction'
+                        },
+                        onCommit: {
+                            '?.dataset.swipeCommitted': 'true'
+                        },
+                        onCancel: {
+                            '?.dataset.swipeCancelled': 'true'
+                        }
+                    }
+                }
+            }
+        });
+
         customElements.define('test-swipe-default', TestSwipeDefault);
         customElements.define('test-swipe-handle', TestSwipeHandle);
+        customElements.define('test-swipe-declarative', TestSwipeDeclarative);
 
         // Synthetic PointerEvents do not have a live pointer, so setPointerCapture
         // would throw. Stub it so we can test the gesture math programmatically.
@@ -206,6 +245,25 @@
             console.assert(hCommitted === true, 'Test 3 failed: expected commit on bidirectional swipe');
             console.log('Test 3 (bidirectional handle swipe commits):', hCommitted);
 
+            // Test 4: declarative callbacks via customData.assign
+            const declarativeEl = document.getElementById('declarative');
+            const declarativeDrawer = declarativeEl.querySelector('.drawer');
+
+            pointerEvent(declarativeDrawer, 'pointerdown', 50, 50);
+            await sleep(10);
+            pointerEvent(declarativeDrawer, 'pointermove', 100, 50);
+            await sleep(10);
+
+            console.assert(declarativeEl.dataset.swipeDelta === '50', `Test 4 failed: expected swipeDelta 50, got ${declarativeEl.dataset.swipeDelta}`);
+            console.assert(declarativeEl.dataset.swipeFraction === (50 / 300).toString(), `Test 4 failed: expected swipeFraction ~0.17, got ${declarativeEl.dataset.swipeFraction}`);
+            console.log('Test 4 (declarative onProgress updates host):', declarativeEl.dataset.swipeDelta, declarativeEl.dataset.swipeFraction);
+
+            pointerEvent(declarativeDrawer, 'pointerup', 100, 50);
+            await sleep(10);
+
+            console.assert(declarativeEl.dataset.swipeCancelled === 'true', 'Test 4 failed: expected cancel via declarative onCancel');
+            console.log('Test 4 (declarative onCancel updates host):', declarativeEl.dataset.swipeCancelled);
+
             console.log('All SwipeDismissFeature tests passed!');
         }
 
@@ -225,5 +283,10 @@
         <div class="handle">Drag me left or right</div>
         <div class="panel">Panel</div>
     </test-swipe-handle>
+
+    <h2>Test 4: Declarative callbacks</h2>
+    <test-swipe-declarative id="declarative" swipe-dismiss-axis="x" swipe-dismiss-direction="1" swipe-dismiss-distance-threshold="0.3" swipe-dismiss-velocity-threshold="0.5">
+        <div class="drawer">Drag me right</div>
+    </test-swipe-declarative>
 </body>
 </html>

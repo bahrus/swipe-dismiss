@@ -124,3 +124,41 @@ assignFrom(this.#hostRef.deref(), customData.assign.onProgress, customData.{...a
 Does this make sense?
 
 If so, please implement and update the README.md documentation, and add your implementation notes below.  If not, please ask for clarification below or honestly point out what I'm missing.
+
+## Implementation Notes
+
+Implemented declarative callback support in `SwipeDismissFeature.js`.
+
+### What changed
+
+- `SwipeDismissFeature.js`
+  - Imports `assignFrom` from `assign-gingerly/assignFrom.js`.
+  - Stores `ctx.injection.customData` on construction so the declarative config is available during the gesture.
+  - Adds a public `hostRef` getter and a public `progressState` property (`{ deltaPx, fraction }`).
+  - Updates `progressState` on every `pointermove` and before `pointerup` decides commit/cancel.
+  - Calls imperative `onProgress` / `onCommit` / `onCancel` first, then runs the matching `customData.assign.*` pattern through `assignFrom` with `from: this`.
+  - `customData.assignOptions` is spread into the `assignFrom` options, so consumers can pass `withMethods`, `aka`, `substitutions`, etc.
+- `types/swipe-dismiss/types.d.ts`
+  - Extended `AllProps` with `hostRef: WeakRef<Element>` and `progressState: { deltaPx: number, fraction: number }`.
+- `package.json` / `package-lock.json`
+  - Moved `assign-gingerly` from `devDependencies` to `dependencies` because `SwipeDismissFeature.js` now imports it at runtime.
+- `README.md`
+  - Added a **Declarative callbacks** section with the `customData.assign` pattern.
+  - Added `hostRef` and `progressState` to the API table.
+
+### How the declarative callbacks work
+
+For each callback phase, `SwipeDismissFeature` first runs the imperative callback if present, then calls:
+
+```js
+assignFrom(host, this.#customData.assign.onProgress, {
+  ...this.#customData.assignOptions,
+  from: this,
+});
+```
+
+Because `from` is the feature instance, RHS paths like `?.progressState.deltaPx` resolve to the live drag state. The target is the host element, so LHS paths like `?.open` assign directly to the custom element.
+
+### Not addressed
+
+The separate shadow-DOM query-scope blocker noted above is not changed by this work. `handleSelector` / `panelSelector` still use `host.querySelector`, which does not cross shadow boundaries. Consumers using `customData.assign` can target shadow DOM nodes via `assign-gingerly` paths (e.g. `?.shadowRoot?.querySelector(...)` when `withMethods` / `aka` is configured) instead of relying on the feature's selectors.
