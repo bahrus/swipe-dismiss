@@ -8,6 +8,28 @@ This package provides both an element enhancement / custom attribute, to apply t
 
 [Ideally, it will be the same class, just different configuration integration artifacts, but that remains to be seen].
 
+## Practical Starting Point
+
+I would start with the **custom element feature** first, because the lifecycle is simpler and the test harness in the feature docs is more direct. Once the controller works there, wrap it as an **enhancement** by translating attribute config into the same controller options. The generated `emc.json` would look something like:
+
+```json
+{
+    "enhConfig": {
+        "enhKey": "SwipeDismiss",
+        "spawn": "swipe-dismiss/swipe-dismiss.js",
+        "withAttrs": {
+            "base": "swipe-dismiss",
+            "axis": "${base}-axis",
+            "direction": "${base}-direction",
+            "distanceThreshold": "${base}-distance-threshold",
+            "velocityThreshold": "${base}-velocity-threshold"
+        }
+    }
+}
+```
+
+The feature registration would be similar but declared on the host element via `assignFeatures` and `withAttrs`.
+
 ## Viewing Demos Locally
 
 1. Install git
