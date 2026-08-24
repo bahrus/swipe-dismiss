@@ -1,5 +1,7 @@
 # Declarative Support
 
+## Background
+
 I asked Kimi To Integrate the swipe-dismiss feature into the side-burger [HTML-first custom element](/types/NewHTMLFirstCustomElement.md).  The ideal of such HTML-first custom elements is zero custom imperative logic -- everything is configurable via JSON that declaratively defines how the HtML children interact.  The effort fell short (expand below)
 
 <details>
@@ -50,3 +52,75 @@ What is the intended way to wire `SwipeDismissFeature`'s `onProgress`/`onCommit`
 Which direction should I take?
 
 </details>
+
+## Bruce's Ask
+
+So I *think* what would be able to carry the day is if, instead of (or in addition) to defining imperative callbacks for onProgress, onCommit, onCancel, we can configure:
+
+```JS
+customElements.assignFeatures(MyDrawer, {
+    swipeDismiss: {
+        spawn: SwipeDismissFeature,
+        withAttrs: {
+            base: 'swipe-dismiss',
+            axis: '${base}-axis',
+            direction: '${base}-direction',
+            distanceThreshold: '${base}-distance-threshold',
+            velocityThreshold: '${base}-velocity-threshold',
+            _distanceThreshold: { instanceOf: 'Number' },
+            _velocityThreshold: { instanceOf: 'Number' }
+        },
+        customData: {
+            assign: {
+                onProgress: {
+                    '?.shadowRoot?.panel?.style?.transform =>': {
+                        do: 'builtIns.join',
+                        get: {
+                            value: ['translateX(', '?.progressState?.deltaPx', 'px)']
+                        }
+                    }
+                },
+                onCommit: {
+                    '?.open': false,
+                },
+                onCancel: {
+                    '?.shadowRoot?.panel?.style?.transform': ''
+                }
+            },
+            assignOptions: { //optional
+                ...
+            }
+
+        }
+    }
+});
+```
+
+Type AllProps would be extended:
+
+```JS
+/**
+ * Internal state of the feature.
+ */
+export interface AllProps extends SwipeDismissProps {
+    /** WeakRef to the host custom element. */
+    hostRef: WeakRef<Element>;
+    progressState: {
+        deltaPx: number,
+        fraction: number
+    }
+}
+```
+
+Prior to performing the assignOnProgress, the progressState swipe-progress feature  would be updated with the current values passed to onProgress. 
+
+This means this package would need to add a dependency to [assign-gingerly](https://github.com/bahrus/assign-gingerly) and use the assignFrom function:
+
+```JS
+//onProgress assignment
+assignFrom(this.#hostRef.deref(), customData.assign.onProgress, customData.{...assignOptions, from: this})
+```
+
+Does this make sense?
+
+If so, please implement and update the README.md documentation, and add your implementation notes below.  If not, please ask for clarification below or honestly point out what I'm missing.
