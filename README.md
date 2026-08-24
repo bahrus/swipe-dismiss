@@ -93,7 +93,7 @@ customElements.assignFeatures(MyDrawer, {
         customData: {
             assign: {
                 onProgress: {
-                    '?.shadowRoot?.panel?.style?.transform =>': {
+                    '?.shadowRoot?.querySelector?.panel?.style?.transform =>': {
                         do: 'builtIns.join',
                         get: {
                             value: ['translateX(', '?.progressState?.deltaPx', 'px)']
@@ -104,11 +104,12 @@ customElements.assignFeatures(MyDrawer, {
                     '?.open': false,
                 },
                 onCancel: {
-                    '?.shadowRoot?.panel?.style?.transform': ''
+                    '?.shadowRoot?.querySelector?.panel?.style?.transform': ''
                 }
             },
             assignOptions: {
                 // optional additional assignFrom options
+                withMethods: ['querySelector']
             }
         }
     }
