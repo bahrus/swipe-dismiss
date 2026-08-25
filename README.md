@@ -58,18 +58,29 @@ drawer.swipeDismiss.onCancel = () => {
 };
 ```
 
-## HTML configuration
+## Wiring up `handle` and `panel`
 
-With the `withAttrs` pattern above, the host element can be configured declaratively:
+The feature does **not** guess at a handle or panel by searching the host (light DOM, shadow DOM, or otherwise) — it has no way to know where those elements actually live. Instead, the host element must hand the feature real `Element` references.
 
-```html
-<my-drawer swipe-dismiss-axis="x"
-           swipe-dismiss-direction="1"
-           swipe-dismiss-distance-threshold="0.3"
-           swipe-dismiss-velocity-threshold="0.5">
-    <div part="panel">Drawer content</div>
-</my-drawer>
+The feature stays completely inert — no `pointerdown` listener is attached anywhere — until `handle` is set to a non-null `Element`. `panel` (the element that visually follows the drag) defaults to `handle` when left unset, so for the common case of "drag the whole panel to dismiss it" you only need to set `handle`:
+
+```javascript
+const drawer = document.querySelector('my-drawer');
+const panel = drawer.querySelector('[part="panel"]');
+
+drawer.swipeDismiss.handle = panel; // hydrates immediately; panel defaults to handle
 ```
+
+For a dedicated drag handle distinct from the panel that moves, set both:
+
+```javascript
+drawer.swipeDismiss.handle = drawer.querySelector('[part="handle"]');
+drawer.swipeDismiss.panel = drawer.querySelector('[part="panel"]');
+```
+
+Both `handle` and `panel` are ordinary reactive properties: setting either one at any time (before or after the feature has already hydrated) tears down the previous `pointerdown` listener and attaches a fresh one to the new element. This makes the feature safe to use with elements that get replaced later — just re-assign `handle`/`panel` when that happens.
+
+Because `Element` values can't be expressed as HTML attribute strings, there's no attribute-based (`withAttrs`) equivalent for `handle`/`panel` — they're always set as JS properties. If you want to wire them up declaratively from a host component's own configuration (rather than imperatively as above), that's a concern of the host, e.g. via [assign-gingerly](https://github.com/bahrus/assign-gingerly) patterns that resolve to the right elements and assign them to `drawer.swipeDismiss.handle`/`.panel` — not something this feature package needs to know about.
 
 ## Declarative callbacks
 
@@ -128,8 +139,8 @@ The feature exposes these configurable properties:
 | `direction` | `1 \| -1 \| 'both'` | `1` | Direction that counts toward dismissal. `1` = right/down, `-1` = left/up, `'both'` = either direction (useful for toasts/snackbars). |
 | `distanceThreshold` | `number` | `0.4` | Fraction of the panel size that must be dragged to trigger commit. |
 | `velocityThreshold` | `number` | `0.5` | Velocity threshold in px/ms. A fast flick commits even if distance is below the threshold. |
-| `handleSelector` | `string \| null` | `null` | CSS selector for the drag handle. Defaults to the host element. |
-| `panelSelector` | `string \| null` | `null` | CSS selector for the panel that visually follows the drag. Defaults to the handle. |
+| `handle` | `Element \| null` | `null` | The drag handle. Setting this attaches (or re-attaches) the `pointerdown` listener; the feature stays inert while this is `null`. |
+| `panel` | `Element \| null` | `null` | The panel that visually follows the drag. Defaults to `handle` when left `null`. |
 | `onProgress` | `(deltaPx: number, fraction: number) => void` | `null` | Called on every pointer move with the current delta and the fraction of the panel size. |
 | `onCommit` | `() => void` | `null` | Called when the gesture crosses the commit threshold. |
 | `onCancel` | `() => void` | `null` | Called when the gesture is released before the commit threshold. |

@@ -89,8 +89,6 @@
                     base: 'swipe-dismiss',
                     axis: '${base}-axis',
                     direction: '${base}-direction',
-                    handleSelector: '${base}-handle',
-                    panelSelector: '${base}-panel',
                     distanceThreshold: '${base}-distance-threshold',
                     velocityThreshold: '${base}-velocity-threshold',
                     _distanceThreshold: { instanceOf: 'Number' },
@@ -181,6 +179,23 @@
             console.assert(feature.axis === 'x', 'axis should be x');
             console.assert(feature.distanceThreshold === 0.3, 'distanceThreshold should be 0.3');
 
+            // Test 0: feature sits inert until `handle` is set — no listener attached,
+            // so this pointer sequence should be a silent no-op.
+            pointerEvent(drawer, 'pointerdown', 50, 50);
+            await sleep(10);
+            pointerEvent(drawer, 'pointermove', 150, 50);
+            await sleep(10);
+            pointerEvent(drawer, 'pointerup', 150, 50);
+            await sleep(10);
+
+            console.assert(committed === null, 'Test 0 failed: expected no-op before handle is set');
+            console.log('Test 0 (inert until handle is set):', committed);
+
+            // Setting `handle` hydrates the feature (panel defaults to handle).
+            feature.handle = drawer;
+            console.assert(feature.handle === drawer, 'handle should be drawer');
+            console.assert(feature.panel === null, 'panel should still be null (defaults to handle)');
+
             // Test 1: drag past 30% of 300px => commit
             pointerEvent(drawer, 'pointerdown', 50, 50);
             await sleep(10);
@@ -232,7 +247,12 @@
             };
 
             console.assert(hFeature.direction === 'both', 'direction should be both');
-            console.assert(hFeature.handleSelector === '.handle', 'handleSelector should be .handle');
+
+            // Feature is inert until handle/panel are set explicitly.
+            hFeature.handle = handle;
+            hFeature.panel = panel;
+            console.assert(hFeature.handle === handle, 'handle should be the .handle element');
+            console.assert(hFeature.panel === panel, 'panel should be the .panel element');
 
             // Swipe left on handle (negative delta, direction both => abs)
             pointerEvent(handle, 'pointerdown', 250, 50);
@@ -248,6 +268,7 @@
             // Test 4: declarative callbacks via customData.assign
             const declarativeEl = document.getElementById('declarative');
             const declarativeDrawer = declarativeEl.querySelector('.drawer');
+            declarativeEl.swipeDismiss.handle = declarativeDrawer;
 
             pointerEvent(declarativeDrawer, 'pointerdown', 50, 50);
             await sleep(10);
@@ -279,7 +300,7 @@
     </test-swipe-default>
 
     <h2>Test 3: Separate handle, bidirectional</h2>
-    <test-swipe-handle id="handle" swipe-dismiss-axis="x" swipe-dismiss-direction="both" swipe-dismiss-handle=".handle" swipe-dismiss-panel=".panel" swipe-dismiss-distance-threshold="0.3" swipe-dismiss-velocity-threshold="0.5">
+    <test-swipe-handle id="handle" swipe-dismiss-axis="x" swipe-dismiss-direction="both" swipe-dismiss-distance-threshold="0.3" swipe-dismiss-velocity-threshold="0.5">
         <div class="handle">Drag me left or right</div>
         <div class="panel">Panel</div>
     </test-swipe-handle>

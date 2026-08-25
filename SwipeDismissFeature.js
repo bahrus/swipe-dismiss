@@ -18,9 +18,6 @@ class SwipeDismissFeature {
     /** @type {AbortController | null} */
     #pointerDownAbort = null;
 
-    /** @type {boolean} */
-    #hasDisconnected = false;
-
     /** @type {import('./types/assign-gingerly/types').FeatureConfig['customData'] | undefined} */
     #customData;
 
@@ -36,11 +33,11 @@ class SwipeDismissFeature {
     /** @type {number} */
     velocityThreshold = 0.5;
 
-    /** @type {string | null} */
-    handleSelector = null;
+    /** @type {Element | null} */
+    #handle = null;
 
-    /** @type {string | null} */
-    panelSelector = null;
+    /** @type {Element | null} */
+    #panel = null;
 
     /** @type {((deltaPx: number, fraction: number) => void) | null} */
     onProgress = null;
@@ -63,6 +60,35 @@ class SwipeDismissFeature {
     }
 
     /**
+     * The drag handle. Setting this (to a new element, or to null) aborts any
+     * previously attached listener and, if non-null and the host is connected,
+     * attaches a fresh one. No hydration happens until this is set.
+     * @returns {Element | null}
+     */
+    get handle() {
+        return this.#handle;
+    }
+
+    set handle(el) {
+        this.#handle = el ?? null;
+        this.#connect();
+    }
+
+    /**
+     * The panel that visually follows the drag. Defaults to `handle` when left
+     * `null`. Setting this re-hydrates the same way `handle` does.
+     * @returns {Element | null}
+     */
+    get panel() {
+        return this.#panel;
+    }
+
+    set panel(el) {
+        this.#panel = el ?? null;
+        this.#connect();
+    }
+
+    /**
      * @param {Element} hostElement
      * @param {FeatureSpawnContext} ctx
      * @param {Partial<SwipeDismissProps>} [initVals]
@@ -73,28 +99,20 @@ class SwipeDismissFeature {
         if (initVals) {
             Object.assign(this, initVals);
         }
-        // Features are spawned during the first connectedCallback, so the host
-        // is connected here. Guard against future disconnect/reconnect cycles.
-        if (hostElement.isConnected) {
-            this.#connect();
-        }
+        this.#connect();
     }
 
     /**
      * Call from the host's connectedCallback() (via callbackForwarding).
      */
     hostConnected() {
-        if (this.#hasDisconnected) {
-            this.#hasDisconnected = false;
-            this.#connect();
-        }
+        this.#connect();
     }
 
     /**
      * Call from the host's disconnectedCallback() (via callbackForwarding).
      */
     hostDisconnected() {
-        this.#hasDisconnected = true;
         this.#disconnect();
     }
 
@@ -121,15 +139,14 @@ class SwipeDismissFeature {
     }
 
     #connect() {
-        const host = this.#host;
-        if (!host) return;
-
         this.#disconnect();
-        const handle = this.#resolveHandle(host);
-        if (!handle) return;
+
+        const host = this.#host;
+        if (!host || !host.isConnected) return;
+        if (!this.#handle) return;
 
         this.#pointerDownAbort = new AbortController();
-        handle.addEventListener('pointerdown', this.#onPointerDown, {
+        this.#handle.addEventListener('pointerdown', this.#onPointerDown, {
             signal: this.#pointerDownAbort.signal,
         });
     }
@@ -138,30 +155,6 @@ class SwipeDismissFeature {
         this.#pointerDownAbort?.abort();
         this.#pointerDownAbort = null;
         this.#endDrag();
-    }
-
-    /**
-     * @param {Element} host
-     * @returns {Element | null}
-     */
-    #resolveHandle(host) {
-        if (this.handleSelector) {
-            return host.querySelector(this.handleSelector);
-        }
-        return host;
-    }
-
-    /**
-     * @param {Element} handle
-     * @returns {Element | null}
-     */
-    #resolvePanel(handle) {
-        const host = this.#host;
-        if (!host) return null;
-        if (this.panelSelector) {
-            return host.querySelector(this.panelSelector);
-        }
-        return handle;
     }
 
     /**
@@ -187,11 +180,10 @@ class SwipeDismissFeature {
         const host = this.#host;
         if (!host || !host.isConnected) return;
 
-        const handle = this.#resolveHandle(host);
+        const handle = this.#handle;
         if (!handle) return;
 
-        const panel = this.#resolvePanel(handle);
-        if (!panel) return;
+        const panel = this.#panel ?? handle;
 
         const rect = panel.getBoundingClientRect();
         const size = this.axis === 'x' ? rect.width : rect.height;
