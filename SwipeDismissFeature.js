@@ -223,7 +223,7 @@ class SwipeDismissFeature {
         const current = this.axis === 'x' ? event.clientX : event.clientY;
         const raw = current - state.start;
         const directed = this.#applyDirection(raw);
-        const clamped = Math.max(0, directed);
+        const clamped = Math.min(Math.max(0, directed), state.size);
         const fraction = clamped / state.size;
 
         this.progressState = { deltaPx: clamped, fraction };
@@ -241,7 +241,7 @@ class SwipeDismissFeature {
         const current = this.axis === 'x' ? event.clientX : event.clientY;
         const raw = current - state.start;
         const directed = this.#applyDirection(raw);
-        const delta = Math.max(0, directed);
+        const delta = Math.min(Math.max(0, directed), state.size);
         const elapsed = performance.now() - state.startTime;
         const velocity = elapsed > 0 ? delta / elapsed : 0;
 
