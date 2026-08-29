@@ -49,7 +49,7 @@ class SwipeDismissFeature {
     onCancel = null;
 
     /** @type {import('./types/swipe-dismiss/types').AllProps['progressState']} */
-    progressState = { deltaPx: 0, fraction: 0 };
+    progressState = { deltaPx: 0, fraction: 0, translatePx: 0 };
 
     /**
      * WeakRef to the host custom element.
@@ -226,7 +226,11 @@ class SwipeDismissFeature {
         const clamped = Math.min(Math.max(0, directed), state.size);
         const fraction = clamped / state.size;
 
-        this.progressState = { deltaPx: clamped, fraction };
+        this.progressState = {
+            deltaPx: clamped,
+            fraction,
+            translatePx: this.#directionSign() * clamped,
+        };
         this.onProgress?.(clamped, fraction);
         this.#assignFrom('onProgress');
     };
@@ -245,7 +249,11 @@ class SwipeDismissFeature {
         const elapsed = performance.now() - state.startTime;
         const velocity = elapsed > 0 ? delta / elapsed : 0;
 
-        this.progressState = { deltaPx: delta, fraction: delta / state.size };
+        this.progressState = {
+            deltaPx: delta,
+            fraction: delta / state.size,
+            translatePx: this.#directionSign() * delta,
+        };
 
         this.#endDrag();
 
@@ -261,6 +269,16 @@ class SwipeDismissFeature {
             this.#assignFrom('onCancel');
         }
     };
+
+    /**
+     * Signed multiplier that maps the always-positive drag magnitude onto a
+     * screen-space translation: -1 for a left/up drawer, +1 for right/down.
+     * `'both'` has no single dismiss direction, so it falls back to +1.
+     * @returns {number}
+     */
+    #directionSign() {
+        return Number(this.direction) < 0 ? -1 : 1;
+    }
 
     /**
      * Apply the configured direction to a raw delta.
