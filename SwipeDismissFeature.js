@@ -158,10 +158,22 @@ class SwipeDismissFeature {
     }
 
     /**
+     * Movement (px) along the axis, in the dismiss direction, required before a
+     * pointerdown is treated as a drag. Below this a press is left alone so the
+     * native `click` still reaches whatever was pressed (close buttons, links,
+     * etc. inside the panel).
+     * @type {number}
+     */
+    #slop = 8;
+
+    /**
      * Current drag state.
      * @typedef {Object} DragState
      * @property {number} pointerId
+     * @property {boolean} active - false until movement passes #slop; while
+     *   false no pointer capture is held and no progress is reported
      * @property {number} start - start coordinate along the active axis
+     * @property {number} startCross - start coordinate along the other axis
      * @property {number} startTime
      * @property {number} size - panel size along the active axis
      * @property {Element} handle
@@ -191,15 +203,20 @@ class SwipeDismissFeature {
 
         this.#endDrag();
 
+        // Record the press but do NOT capture the pointer or treat it as a drag
+        // yet. Capturing on pointerdown would retarget the follow-up
+        // pointerup/click to the panel, so a mouse click on a control inside the
+        // panel (e.g. a close button) would never fire. Capture is deferred to
+        // #onPointerMove, once movement passes #slop.
         this.#dragState = {
             pointerId: event.pointerId,
+            active: false,
             start: this.axis === 'x' ? event.clientX : event.clientY,
+            startCross: this.axis === 'x' ? event.clientY : event.clientX,
             startTime: performance.now(),
             size,
             handle,
         };
-
-        handle.setPointerCapture(event.pointerId);
 
         this.#dragAbort = new AbortController();
         handle.addEventListener('pointermove', this.#onPointerMove, {
@@ -221,6 +238,35 @@ class SwipeDismissFeature {
         if (!state || event.pointerId !== state.pointerId) return;
 
         const current = this.axis === 'x' ? event.clientX : event.clientY;
+
+        if (!state.active) {
+            const cross = (this.axis === 'x' ? event.clientY : event.clientX) - state.startCross;
+            const along = this.#applyDirection(current - state.start);
+
+            // Cross-axis movement wins first → this is a scroll, not a dismiss.
+            // Bail out so the browser keeps the gesture (e.g. panel scrolling).
+            if (Math.abs(cross) > this.#slop && Math.abs(cross) > Math.abs(along)) {
+                this.#endDrag();
+                return;
+            }
+
+            // Not enough movement in the dismiss direction yet — leave the
+            // press alone (a click can still happen on pointerup).
+            if (along <= this.#slop) return;
+
+            // Threshold crossed: promote to a real drag. Capture now, and
+            // re-baseline so progress starts from 0 with no visual jump.
+            state.active = true;
+            state.start = current;
+            state.startCross = this.axis === 'x' ? event.clientY : event.clientX;
+            state.startTime = performance.now();
+            try {
+                state.handle.setPointerCapture(state.pointerId);
+            } catch {
+                // Capture can throw if the pointer is already gone.
+            }
+        }
+
         const raw = current - state.start;
         const directed = this.#applyDirection(raw);
         const clamped = Math.min(Math.max(0, directed), state.size);
@@ -241,6 +287,13 @@ class SwipeDismissFeature {
     #onPointerUp = (event) => {
         const state = this.#dragState;
         if (!state || event.pointerId !== state.pointerId) return;
+
+        // Released before the drag ever started (a click/tap): tear down quietly
+        // and let the native click proceed. No commit/cancel callbacks.
+        if (!state.active) {
+            this.#endDrag();
+            return;
+        }
 
         const current = this.axis === 'x' ? event.clientX : event.clientY;
         const raw = current - state.start;
@@ -294,10 +347,12 @@ class SwipeDismissFeature {
 
     #endDrag() {
         if (this.#dragState) {
-            try {
-                this.#dragState.handle.releasePointerCapture(this.#dragState.pointerId);
-            } catch {
-                // Release may throw if the pointer is no longer valid.
+            if (this.#dragState.active) {
+                try {
+                    this.#dragState.handle.releasePointerCapture(this.#dragState.pointerId);
+                } catch {
+                    // Release may throw if the pointer is no longer valid.
+                }
             }
             this.#dragState = null;
         }
